@@ -1,12 +1,10 @@
-# computer_vision
+# Computer Vision 
+## @ University of Bucharest
 
-An implementation in Golang of the algorithm presented in this paper: https://perso.crans.org/frenoy/matlab2012/seamcarving.pdf
+Golang projects for UNI homework at Computer Vision course:
+1. [Project1](https://github.com/heracle/computer_vision/blob/master/project1/README.md): 
+Seam Carving for Content-Aware Image Resizing
 
-The binary has the following commands:
-
-1. Delete X width and Y height pixels from the image while keeping the most interesting content
-2. Inserting X width and Y height pixels in the image
-3. Amplification of the content with a factor of +x%
-4. Delete any convex poly line in the received image
-
-For more details, just run the binary and the cobra command will provide a description for all the available commands.
+2. [Project2](https://github.com/heracle/computer_vision/blob/master/project2/README.md):
+Image Quilting for Texture Synthesis and Transfer
+   
