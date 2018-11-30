@@ -1,4 +1,4 @@
-package cmd
+package meta
 
 import (
 	"fmt"
@@ -11,7 +11,12 @@ import (
 	"os"
 )
 
-func getImageFromPath(path string) (image.Image, error) {
+type Point struct {
+	X 	int
+	Y 	int
+}
+
+func GetImageFromPath(path string) (image.Image, error) {
 	imgFile, err := os.Open(path)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not open file '%v'", path)
@@ -25,7 +30,7 @@ func getImageFromPath(path string) (image.Image, error) {
 	return img, nil
 }
 
-func getGrayImage(img image.Image) [][]float64 {
+func GetGrayImage(img image.Image) [][]float64 {
 	bounds := img.Bounds()
 
 	grayScale := make([][]float64, bounds.Dx())
@@ -46,7 +51,7 @@ func getGrayImage(img image.Image) [][]float64 {
 	return  grayScale
 }
 
-func sobelFilter(gray [][]float64) [][]float64 {
+func SobelFilter(gray [][]float64) [][]float64 {
 	gx := [][]float64{
 		{-1, 0, 1},
 		{-2, 0, 2},
@@ -65,8 +70,8 @@ func sobelFilter(gray [][]float64) [][]float64 {
 
 	for x := 1; x < len(gray) - 1; x ++ {
 		for y := 1; y < len(gray[x]) - 1; y ++ {
-			sx := cartesianProductSum(gx, gray, x, y)
-			sy := cartesianProductSum(gy, gray, x, y)
+			sx := CartesianProductSum(gx, gray, x, y)
+			sy := CartesianProductSum(gy, gray, x, y)
 
 			magnitude[x][y] = math.Sqrt(sx * sx + sy * sy)
 		}
@@ -74,7 +79,7 @@ func sobelFilter(gray [][]float64) [][]float64 {
 	return magnitude
 }
 
-func cartesianProductSum(g [][]float64, img [][]float64, x int, y int) float64 {
+func CartesianProductSum(g [][]float64, img [][]float64, x int, y int) float64 {
 	var res float64
 
 	for i := -1; i <= 1; i++ {
@@ -86,7 +91,7 @@ func cartesianProductSum(g [][]float64, img [][]float64, x int, y int) float64 {
 	return res
 }
 
-func printMagnitude(magnitude [][]float64, path string) error {
+func PrintMagnitude(magnitude [][]float64, path string) error {
 	img := image.NewRGBA(image.Rect(0,0, len(magnitude), len(magnitude[0])))
 	for x := 0; x < len(magnitude); x ++ {
 		if len(magnitude[x]) != len(magnitude[0]) {
@@ -106,15 +111,15 @@ func printMagnitude(magnitude [][]float64, path string) error {
 	return jpeg.Encode(outFile, img, nil)
 }
 
-func rotateClockLine(srcImg image.Image, poliLyne []point) {
+func RotateClockLine(srcImg image.Image, poliLyne []Point) {
 	for i := 0; i < len(poliLyne); i++ {
-		oldX := poliLyne[i].x
-		poliLyne[i].x = poliLyne[i].y
-		poliLyne[i].y = srcImg.Bounds().Dx() - 1 - oldX
+		oldX := poliLyne[i].X
+		poliLyne[i].X = poliLyne[i].Y
+		poliLyne[i].Y = srcImg.Bounds().Dx() - 1 - oldX
 	}
 }
 
-func rotateClock(srcImg image.Image) image.Image {
+func RotateClock(srcImg image.Image) image.Image {
 	srcDim := srcImg.Bounds()
 	dstImage := image.NewRGBA(image.Rect(0, 0, srcDim.Dy(), srcDim.Dx()))
 
@@ -127,22 +132,3 @@ func rotateClock(srcImg image.Image) image.Image {
 	return dstImage
 }
 
-func proceedErase(img image.Image, noPixelsWidthToErase int, noPixelsHeightToErase int, mode string) (image.Image, error) {
-	img, err := proceedVerticalErase(img, noPixelsWidthToErase, mode)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not process the vertical erase of %v pixels on received image", noPixelsWidthToErase)
-	}
-
-	img = rotateClock(img)
-
-	img, err = proceedVerticalErase(img, noPixelsHeightToErase, mode)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not process the orizontal erase of %v pixels on received image", noPixelsHeightToErase)
-	}
-
-	img = rotateClock(img)
-	img = rotateClock(img)
-	img = rotateClock(img)
-
-	return img, nil
-}

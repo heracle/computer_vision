@@ -6,6 +6,8 @@ import (
 	"strconv"
 
 	"github.com/nfnt/resize"
+
+	"computer_vision/lib"
 )
 
 func AmplificationImageContent() *cobra.Command {
@@ -17,7 +19,7 @@ func AmplificationImageContent() *cobra.Command {
 		Args: cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			imgPath := args[0]
-			img, err := getImageFromPath(imgPath)
+			img, err := meta.GetImageFromPath(imgPath)
 			if err != nil {
 				return errors.Wrapf(err, "could not get an image obj from path '%v'", imgPath)
 			}

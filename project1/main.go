@@ -5,7 +5,7 @@ import (
 	cobra2 "github.com/spf13/cobra"
 	"os"
 
-	"computer_vision/project2/cmd"
+	"computer_vision/project1/cmd"
 )
 
 func main() {

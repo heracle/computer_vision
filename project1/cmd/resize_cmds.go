@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"computer_vision/lib"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"image"
 	"strconv"
 )
 
@@ -20,7 +22,7 @@ func DecreaseSizeImage() *cobra.Command {
 		Args: cobra.ExactArgs(3),
 		RunE: func(_ *cobra.Command, args []string) error {
 			imgPath := args[0]
-			img, err := getImageFromPath(imgPath)
+			img, err := meta.GetImageFromPath(imgPath)
 			if err != nil {
 				return errors.Wrapf(err, "could not get an image obj from path '%v'", imgPath)
 			}
@@ -54,7 +56,7 @@ func IncreaseSizeImage() *cobra.Command {
 		Args: cobra.ExactArgs(3),
 		RunE: func(_ *cobra.Command, args []string) error {
 			imgPath := args[0]
-			img, err := getImageFromPath(imgPath)
+			img, err := meta.GetImageFromPath(imgPath)
 			if err != nil {
 				return errors.Wrapf(err, "could not get an image obj from path '%v'", imgPath)
 			}
@@ -83,7 +85,7 @@ func IncreaseSizeImage() *cobra.Command {
 				noPixelsWidthToIncrease -= pixelsToErase
 			}
 
-			img = rotateClock(img)
+			img = meta.RotateClock(img)
 
 			for noPixelsHeightToIncrease > 0 {
 				maxPixelsErase := img.Bounds().Dx() / *maxIncreaseDiv
@@ -99,12 +101,32 @@ func IncreaseSizeImage() *cobra.Command {
 				noPixelsHeightToIncrease -= pixelsToErase
 			}
 
-			img = rotateClock(img)
-			img = rotateClock(img)
-			img = rotateClock(img)
+			img = meta.RotateClock(img)
+			img = meta.RotateClock(img)
+			img = meta.RotateClock(img)
 
 			return printImage(img, initImg, *outputPath)
 		},
 	}
 	return command
+}
+
+func proceedErase(img image.Image, noPixelsWidthToErase int, noPixelsHeightToErase int, mode string) (image.Image, error) {
+	img, err := proceedVerticalErase(img, noPixelsWidthToErase, mode)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not process the vertical erase of %v pixels on received image", noPixelsWidthToErase)
+	}
+
+	img = meta.RotateClock(img)
+
+	img, err = proceedVerticalErase(img, noPixelsHeightToErase, mode)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not process the orizontal erase of %v pixels on received image", noPixelsHeightToErase)
+	}
+
+	img = meta.RotateClock(img)
+	img = meta.RotateClock(img)
+	img = meta.RotateClock(img)
+
+	return img, nil
 }

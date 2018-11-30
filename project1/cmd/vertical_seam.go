@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"computer_vision/lib"
 	"fmt"
 	"github.com/nfnt/resize"
 	"github.com/pkg/errors"
@@ -14,10 +15,10 @@ import (
 const pixelSpace = 10
 
 func processVerticalIncrease(img image.Image, noPixelsToIncrease int, mode string) (image.Image, error) {
-	imgGray := getGrayImage(img)
-	magnitude := sobelFilter(imgGray)
+	imgGray := meta.GetGrayImage(img)
+	magnitude := meta.SobelFilter(imgGray)
 
-	if err := printMagnitude(magnitude, "test_magnitude.jpeg"); err != nil {
+	if err := meta.PrintMagnitude(magnitude, "test_magnitude.jpeg"); err != nil {
 		return nil, errors.Wrapf(err, "could not print magnitude image")
 	}
 
@@ -111,10 +112,10 @@ func increaseOneVertical(srcImg image.Image, vertical []int) image.Image {
 }
 
 func proceedVerticalErase(img image.Image, noPixelsToErase int, mode string) (image.Image, error) {
-	imgGray := getGrayImage(img)
-	magnitude := sobelFilter(imgGray)
+	imgGray := meta.GetGrayImage(img)
+	magnitude := meta.SobelFilter(imgGray)
 
-	if err := printMagnitude(magnitude, "test_magnitude.jpeg"); err != nil {
+	if err := meta.PrintMagnitude(magnitude, "test_magnitude.jpeg"); err != nil {
 		return nil, errors.Wrapf(err, "could not print magnitude image")
 	}
 

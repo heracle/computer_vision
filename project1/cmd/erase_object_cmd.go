@@ -5,12 +5,9 @@ import (
 	"github.com/spf13/cobra"
 	"image"
 	"strconv"
-)
 
-type point struct {
-	x 	int
-	y 	int
-}
+	"computer_vision/lib"
+)
 
 func EraseObject() *cobra.Command {
 	var command = &cobra.Command{
@@ -19,13 +16,13 @@ func EraseObject() *cobra.Command {
 		Args: cobra.MinimumNArgs(7),
 		RunE: func(_ *cobra.Command, args []string) error {
 			imgPath := args[0]
-			img, err := getImageFromPath(imgPath)
+			img, err := meta.GetImageFromPath(imgPath)
 			if err != nil {
 				return errors.Wrapf(err, "could not get an image obj from path '%v'", imgPath)
 			}
 			initImg := img
 
-			var polyLine []point
+			var polyLine []meta.Point
 
 			if len(args) % 2 != 1 {
 				return errors.New("not an even number of numbers received")
@@ -42,7 +39,7 @@ func EraseObject() *cobra.Command {
 					return errors.Wrapf(err, "could not parse as integer arg received '%v'", args[1])
 				}
 
-				polyLine = append(polyLine, point{actX, actY})
+				polyLine = append(polyLine, meta.Point{X: actX,Y: actY})
 			}
 
 
@@ -50,31 +47,31 @@ func EraseObject() *cobra.Command {
 			polyLine = append(polyLine, polyLine[0])
 			polyLine = append(polyLine, polyLine[1])
 
-			left := polyLine[0].x
-			right := polyLine[0].x
-			up := polyLine[0].y
-			down := polyLine[0].y
+			left := polyLine[0].X
+			right := polyLine[0].X
+			up := polyLine[0].Y
+			down := polyLine[0].Y
 
 			for _, pt := range polyLine {
-				if pt.x < left {
-					left = pt.x
+				if pt.X < left {
+					left = pt.X
 				}
-				if pt.x > right {
-					right = pt.x
+				if pt.X > right {
+					right = pt.X
 				}
-				if pt.y < up {
-					up = pt.y
+				if pt.Y < up {
+					up = pt.Y
 				}
-				if pt.y > down {
-					down = pt.y
+				if pt.Y > down {
+					down = pt.Y
 				}
 			}
 
 			noErasePixels := right - left
 
 			if down - up < right - left {
-				rotateClockLine(img, polyLine)
-				img = rotateClock(img)
+				meta.RotateClockLine(img, polyLine)
+				img = meta.RotateClock(img)
 				noErasePixels = down - up
 			}
 
@@ -84,9 +81,9 @@ func EraseObject() *cobra.Command {
 			}
 
 			if down - up < right - left {
-				img = rotateClock(img)
-				img = rotateClock(img)
-				img = rotateClock(img)
+				img = meta.RotateClock(img)
+				img = meta.RotateClock(img)
+				img = meta.RotateClock(img)
 			}
 
 			return printImage(img, initImg, *outputPath)
@@ -95,9 +92,9 @@ func EraseObject() *cobra.Command {
 	return command
 }
 
-func proceedObjectErase(img image.Image, noPixelsToErase int, polyLine []point, mode string) (image.Image, error) {
-	imgGray := getGrayImage(img)
-	magnitude := sobelFilter(imgGray)
+func proceedObjectErase(img image.Image, noPixelsToErase int, polyLine []meta.Point, mode string) (image.Image, error) {
+	imgGray := meta.GetGrayImage(img)
+	magnitude := meta.SobelFilter(imgGray)
 
 	for x := range magnitude {
 		for y := range magnitude[x] {
@@ -107,7 +104,7 @@ func proceedObjectErase(img image.Image, noPixelsToErase int, polyLine []point, 
 		}
 	}
 
-	if err := printMagnitude(magnitude, "test_magnitude.jpeg"); err != nil {
+	if err := meta.PrintMagnitude(magnitude, "test_magnitude.jpeg"); err != nil {
 		return nil, errors.Wrapf(err, "could not print magnitude image")
 	}
 
@@ -118,13 +115,13 @@ func proceedObjectErase(img image.Image, noPixelsToErase int, polyLine []point, 
 	return img, nil
 }
 
-func insidePolyLine(x int, y int, polyLine []point) bool {
+func insidePolyLine(x int, y int, polyLine []meta.Point) bool {
 	for i := 2; i < len(polyLine); i ++ {
 	//	Check if the point is always on the same part of the edge
-		dir1 := (x - polyLine[i - 2].x) * (y - polyLine[i - 1].y) -
-			(y - polyLine[i - 2].y) * (x - polyLine[i - 1].x)
-		dir2 := (x - polyLine[i - 1].x) * (y - polyLine[i].y) -
-			(y - polyLine[i - 1].y) * (x - polyLine[i].x)
+		dir1 := (x - polyLine[i - 2].X) * (y - polyLine[i - 1].Y) -
+			(y - polyLine[i - 2].Y) * (x - polyLine[i - 1].X)
+		dir2 := (x - polyLine[i - 1].X) * (y - polyLine[i].Y) -
+			(y - polyLine[i - 1].Y) * (x - polyLine[i].X)
 
 		if dir1 * dir2 < 0 {
 			return false
