@@ -2,23 +2,23 @@ package cmd
 
 import (
 	"computer_vision/lib"
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"image"
 	"image/jpeg"
 	"math"
 	"math/rand"
 	"os"
-
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
+	"sort"
 	"strconv"
 )
 
 var (
 	outputPath = pflag.StringP("output", "o", "result.jpeg", "The path where to save the output jpeg picture.")
-	noRandomBlocks = pflag.Int("no-blocks", 5000, "The number of random blocks which will fill the new image.")
-	lenBlockSquare = pflag.Int("len-block-square", 60, "The number of pixels in length of each block square.")
-	lenOverlapSquares = pflag.Int("len-overlap-blocks", 20, "The number of pixels in length representing the overlap between two consecutive blocks.")
+	noRandomBlocks = pflag.Int("no-blocks", 10000, "The number of random blocks which will fill the new image.")
+	lenBlockSquare = pflag.Int("len-block-square", 36, "The number of pixels in length of each block square.")
+	lenOverlapSquares = pflag.Int("len-overlap-blocks", 6, "The number of pixels in length representing the overlap between two consecutive blocks.")
 	distanceFromBorder = pflag.Int("distance-border", 0, "The minimum distance of the random blocks from the border of the initial image.")
 	)
 
@@ -54,7 +54,12 @@ func EnlargeImage() *cobra.Command {
 				return errors.Wrapf(err, "could not get the random blocks")
 			}
 
-			resultImg, err := createImage(blocks, int(factorAmp * float64(img.Bounds().Dx())), int(factorAmp * float64(img.Bounds().Dy())), *lenOverlapSquares)
+			resultImg, err := createImage(
+				blocks,
+				int(factorAmp * float64(img.Bounds().Dx())),
+				int(factorAmp * float64(img.Bounds().Dy())),
+				*lenOverlapSquares,
+				)
 			if err != nil {
 				return errors.Wrapf(err, "could not create the image from blocks")
 			}
@@ -114,7 +119,15 @@ func createImage(blocks []blockObj, width int, length int, overlap int) (image.I
 		lenIndex := 0
 		leftBlock := -1
 		for y < length {
-			leftBlock = addBlockToImage(x, y, blockSize, imageBlockIndexPreviousLine[lenIndex], leftBlock, blocks, retImg)
+			leftBlock = addBlockToImage(
+				x,
+				y,
+				blockSize,
+				imageBlockIndexPreviousLine[lenIndex],
+				leftBlock,
+				blocks,
+				retImg,
+				)
 			imageBlockIndexPreviousLine[lenIndex] = leftBlock
 			y += blockSize - overlap
 			lenIndex++
@@ -125,7 +138,20 @@ func createImage(blocks []blockObj, width int, length int, overlap int) (image.I
 	return retImg, nil
 }
 
-func addBlockToImage(xStart int, yStart int, blockSize int, upLastBlock int, leftLastBlock int, blocks []blockObj, img *image.RGBA) int {
+type pair struct {
+	index int
+	error float64
+}
+
+func addBlockToImage(
+	xStart int,
+	yStart int,
+	blockSize int,
+	upLastBlock int,
+	leftLastBlock int,
+	blocks []blockObj,
+	img *image.RGBA,
+	) int {
 	if upLastBlock == -1 && leftLastBlock == -1 {
 		firstBlock := rand.Intn(len(blocks))
 		for x := 0; x < blockSize; x++ {
@@ -139,12 +165,11 @@ func addBlockToImage(xStart int, yStart int, blockSize int, upLastBlock int, lef
 	minError := float64(math.MaxFloat64)
 	minBlock := -1
 
+	possibleBlocks := make([]pair, len(blocks))
+
 	for indexBlock := 0; indexBlock < len(blocks); indexBlock++ {
 		actualError := float64(0)
 		if upLastBlock != -1 {
-			//grayXMax := meta.GetGrayImage(blocks[upLastBlock].xMax)
-			//grayXMin := meta.GetGrayImage(blocks[indexBlock].xMin)
-
 			for x := 0; x < len(blocks[upLastBlock].xMax); x++ {
 				for y := 0; y < len(blocks[upLastBlock].xMax[x]); y++ {
 					dif := blocks[upLastBlock].xMax[x][y] - blocks[indexBlock].xMin[x][y]
@@ -153,9 +178,6 @@ func addBlockToImage(xStart int, yStart int, blockSize int, upLastBlock int, lef
 			}
 		}
 		if leftLastBlock != -1 {
-			//grayYMax := meta.GetGrayImage(blocks[leftLastBlock].yMax)
-			//grayYMin := meta.GetGrayImage(blocks[indexBlock].yMin)
-
 			for x := 0; x < len(blocks[leftLastBlock].yMax); x++ {
 				for y := 0; y < len(blocks[leftLastBlock].yMax[x]); y++ {
 					dif := blocks[leftLastBlock].yMax[x][y] - blocks[indexBlock].yMin[x][y]
@@ -167,7 +189,21 @@ func addBlockToImage(xStart int, yStart int, blockSize int, upLastBlock int, lef
 			minError = actualError
 			minBlock = indexBlock
 		}
+
+		possibleBlocks[indexBlock] = pair{index: indexBlock, error: actualError}
 	}
+
+	sort.Slice(possibleBlocks, func(i, j int) bool {
+		return possibleBlocks[i].error < possibleBlocks[j].error
+	})
+
+	foundOkBlocks := 0
+	for foundOkBlocks < len(blocks) && possibleBlocks[foundOkBlocks].error <= 1.1 * minError {
+		foundOkBlocks++
+	}
+
+	minBlock = possibleBlocks[rand.Intn(foundOkBlocks)].index
+
 	var verticallySplit []int
 	var horizontallySplit []int
 
