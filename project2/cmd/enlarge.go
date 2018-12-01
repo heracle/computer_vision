@@ -3,7 +3,6 @@ package cmd
 import (
 	"computer_vision/lib"
 	"image"
-	"image/color"
 	"image/jpeg"
 	"math"
 	"math/rand"
@@ -18,17 +17,17 @@ import (
 var (
 	outputPath = pflag.StringP("output", "o", "result.jpeg", "The path where to save the output jpeg picture.")
 	noRandomBlocks = pflag.Int("no-blocks", 5000, "The number of random blocks which will fill the new image.")
-	lenBlockSquare = pflag.Int("len-block-square", 36, "The number of pixels in length of each block square.")
-	lenOverlapSquares = pflag.Int("len-overlap-blocks", 6, "The number of pixels in length representing the overlap between two consecutive blocks.")
+	lenBlockSquare = pflag.Int("len-block-square", 60, "The number of pixels in length of each block square.")
+	lenOverlapSquares = pflag.Int("len-overlap-blocks", 20, "The number of pixels in length representing the overlap between two consecutive blocks.")
 	distanceFromBorder = pflag.Int("distance-border", 0, "The minimum distance of the random blocks from the border of the initial image.")
 	)
 
 type blockObj struct {
 	complete image.RGBA
-	xMin     image.RGBA
-	xMax     image.RGBA
-	yMin     image.RGBA
-	yMax     image.RGBA
+	xMin     [][]float64
+	xMax     [][]float64
+	yMin     [][]float64
+	yMax     [][]float64
 }
 
 func EnlargeImage() *cobra.Command {
@@ -80,10 +79,10 @@ func getRandomBlocks(img image.Image, noBlocks int, sizeBlock int, overlap int, 
 		left := rand.Intn(img.Bounds().Dy() - sizeBlock - 2* distanceBorder) + distanceBorder
 
 		blocks[blockIndex].complete = defineBlockPart(up, left, sizeBlock, sizeBlock, img)
-		blocks[blockIndex].xMin = defineBlockPart(up, left, overlap, sizeBlock, img)
-		blocks[blockIndex].yMin = defineBlockPart(up, left, sizeBlock, overlap, img)
-		blocks[blockIndex].xMax = defineBlockPart(up + sizeBlock - overlap, left, overlap, sizeBlock, img)
-		blocks[blockIndex].yMax = defineBlockPart(up, left + sizeBlock - overlap, sizeBlock, overlap, img)
+		blocks[blockIndex].xMin = meta.GetGrayImage(defineBlockPart(up, left, overlap, sizeBlock, img))
+		blocks[blockIndex].yMin = meta.GetGrayImage(defineBlockPart(up, left, sizeBlock, overlap, img))
+		blocks[blockIndex].xMax = meta.GetGrayImage(defineBlockPart(up + sizeBlock - overlap, left, overlap, sizeBlock, img))
+		blocks[blockIndex].yMax = meta.GetGrayImage(defineBlockPart(up, left + sizeBlock - overlap, sizeBlock, overlap, img))
 	}
 	return blocks, nil
 }
@@ -137,38 +136,32 @@ func addBlockToImage(xStart int, yStart int, blockSize int, upLastBlock int, lef
 		return firstBlock
 	}
 
-	minError := float64(math.MaxInt32)
+	minError := float64(math.MaxFloat64)
 	minBlock := -1
 
 	for indexBlock := 0; indexBlock < len(blocks); indexBlock++ {
 		actualError := float64(0)
 		if upLastBlock != -1 {
-			grayXMax := meta.GetGrayImage(blocks[upLastBlock].xMax)
-			grayXMin := meta.GetGrayImage(blocks[indexBlock].xMin)
+			//grayXMax := meta.GetGrayImage(blocks[upLastBlock].xMax)
+			//grayXMin := meta.GetGrayImage(blocks[indexBlock].xMin)
 
-			for x := 0; x < len(grayXMax); x++ {
-				for y := 0; y < len(grayXMax[x]); y++ {
-					actualError += math.Abs(grayXMax[x][y] - grayXMin[x][y])
+			for x := 0; x < len(blocks[upLastBlock].xMax); x++ {
+				for y := 0; y < len(blocks[upLastBlock].xMax[x]); y++ {
+					dif := blocks[upLastBlock].xMax[x][y] - blocks[indexBlock].xMin[x][y]
+					actualError += dif*dif
 				}
 			}
-
-			//for i := 0; i < len(blocks[upLastBlock].xMax.Pix); i++ {
-			//	actualError += sqDiffUInt8(blocks[upLastBlock].xMax.Pix[i], blocks[indexBlock].xMin.Pix[i])
-			//}
 		}
 		if leftLastBlock != -1 {
-			grayYMax := meta.GetGrayImage(blocks[leftLastBlock].yMax)
-			grayYMin := meta.GetGrayImage(blocks[indexBlock].yMin)
+			//grayYMax := meta.GetGrayImage(blocks[leftLastBlock].yMax)
+			//grayYMin := meta.GetGrayImage(blocks[indexBlock].yMin)
 
-			for x := 0; x < len(grayYMax); x++ {
-				for y := 0; y < len(grayYMax[x]); y++ {
-					actualError += math.Abs(grayYMax[x][y] - grayYMin[x][y])
+			for x := 0; x < len(blocks[leftLastBlock].yMax); x++ {
+				for y := 0; y < len(blocks[leftLastBlock].yMax[x]); y++ {
+					dif := blocks[leftLastBlock].yMax[x][y] - blocks[indexBlock].yMin[x][y]
+					actualError += dif*dif
 				}
 			}
-
-			//for i := 0; i < len(blocks[leftLastBlock].yMax.Pix); i++ {
-			//	actualError += sqDiffUInt8(blocks[leftLastBlock].yMax.Pix[i], blocks[indexBlock].yMin.Pix[i])
-			//}
 		}
 		if actualError < minError {
 			minError = actualError
@@ -209,81 +202,72 @@ func emptySplitSlice(len int) []int {
 	return ret
 }
 
-func findHorizontallySplit(img1 image.RGBA, img2 image.RGBA) []int {
+func findHorizontallySplit(img1 [][]float64, img2 [][]float64) []int {
 	horizontal := findVerticallySplit(rotateClock(img1), rotateClock(img2))
 
 	horizontalRev := make([]int, len(horizontal))
 	for i := 0; i < len(horizontal); i++ {
-		horizontalRev[i] = img1.Rect.Dx() - horizontal[i] - 1
+		horizontalRev[i] = len(img1) - horizontal[i] - 1
 	}
 
 	return horizontalRev
 }
 
-func rotateClock(srcImg image.RGBA) image.RGBA {
-	srcDim := srcImg.Bounds()
-	dstImage := image.NewRGBA(image.Rect(0, 0, srcDim.Dy(), srcDim.Dx()))
+func rotateClock(src [][]float64) [][]float64 {
+	ret := make([][]float64, len(src[0]))
+	for i := 0; i < len(src[0]); i++ {
+		ret[i] = make([]float64, len(src))
+	}
 
-	for x := 0; x < srcDim.Dx(); x ++ {
-		for y := 0; y < srcDim.Dy(); y++ {
-			dstImage.Set(y, srcDim.Dx() - 1 - x, srcImg.At(x, y))
+	for x := 0; x < len(src); x ++ {
+		for y := 0; y < len(src[0]); y++ {
+			ret[y][len(src) - 1 - x] = src[x][y]
 		}
 	}
 
-	return *dstImage
+	return ret
 }
 
-func findVerticallySplit(img1 image.RGBA, img2 image.RGBA) []int {
-	dyn := make([][]float64, img1.Rect.Dx())
-	frm := make([][]int, img1.Rect.Dx())
-	for x := 0; x < img1.Rect.Dx(); x++ {
-		dyn[x] = make([]float64, img1.Rect.Dy())
-		frm[x] = make([]int, img1.Rect.Dx())
+func findVerticallySplit(img1 [][]float64, img2 [][]float64) []int {
+	dyn := make([][]float64, len(img1))
+	frm := make([][]int, len(img1))
+	for x := 0; x < len(img1); x++ {
+		dyn[x] = make([]float64, len(img1[0]))
+		frm[x] = make([]int, len(img1[0]))
 	}
 
-	for y := 0; y < img1.Rect.Dy(); y++ {
-		dyn[0][y] = getDifferencePixels(img1.At(0, y), img2.At(0, y))
+	for y := 0; y < len(img1[0]); y++ {
+		dyn[0][y] = (img1[0][y] - img2[0][y]) * (img1[0][y] - img2[0][y])
 	}
 
-	for x := 1; x < img1.Rect.Dx(); x++ {
-		for y := 0; y < img1.Rect.Dy(); y++ {
+	for x := 1; x < len(img1); x++ {
+		for y := 0; y < len(img1[0]); y++ {
 			dyn[x][y] = dyn[x - 1][y]
 			frm[x][y] = y
 			if y != 0 && dyn[x - 1][y - 1] < dyn[x][y] {
 				dyn[x][y] = dyn[x - 1][y - 1]
 				frm[x][y] = y - 1
 			}
-			if y != img1.Rect.Dy() - 1 && dyn[x - 1][y + 1] < dyn[x][y] {
+			if y != len(img1[0]) - 1 && dyn[x - 1][y + 1] < dyn[x][y] {
 				dyn[x][y] = dyn[x - 1][y + 1]
 				frm[x][y] = y + 1
 			}
-			dyn[x][y] += getDifferencePixels(img1.At(x, y), img2.At(x, y))
+			dyn[x][y] += (img1[x][y] - img2[x][y]) * (img1[x][y] - img2[x][y])
 		}
 	}
 
 	lastP := 0
-	for y := 0; y < img1.Rect.Dy(); y ++ {
-		if dyn[img1.Rect.Dx() - 1][y] < dyn[img1.Rect.Dx() - 1][lastP] {
+	for y := 0; y < len(img1[0]); y ++ {
+		if dyn[len(img1) - 1][y] < dyn[len(img1) - 1][lastP] {
 			lastP = y
 		}
 	}
 
 	vertical := []int{lastP}
 
-	for x := img1.Rect.Dx() - 1; x > 0; x -- {
+	for x := len(img1) - 1; x > 0; x -- {
 		vertical = append([]int{frm[x][lastP]}, vertical...)
 		lastP = frm[x][lastP]
 	}
 	return vertical
-}
-
-func getDifferencePixels(c1 color.Color, c2 color.Color) float64 {
-	r1, g1, b1, a1 := c1.RGBA()
-	r2, g2, b2, a2 := c2.RGBA()
-	return math.Sqrt(float64((r1-r2)*(r1-r2) + (g1-g2)*(g1-g2) + (b1-b2)*(b1-b2) + (a1-a2)*(a1-a2)))
-}
-
-func sqDiffUInt8(x, y uint8) int64 {
-	d := int64(x) - int64(y)
-	return d * d
 }
