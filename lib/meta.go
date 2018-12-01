@@ -1,7 +1,6 @@
 package meta
 
 import (
-	"fmt"
 	"github.com/pkg/errors"
 	"image"
 	"image/color"
@@ -30,7 +29,7 @@ func GetImageFromPath(path string) (image.Image, error) {
 	return img, nil
 }
 
-func GetGrayImage(img image.Image) [][]float64 {
+func GetGrayImage(img image.RGBA) [][]float64 {
 	bounds := img.Bounds()
 
 	grayScale := make([][]float64, bounds.Dx())
@@ -38,8 +37,6 @@ func GetGrayImage(img image.Image) [][]float64 {
 	for i := range grayScale {
 		grayScale[i] = make([]float64, bounds.Dy())
 	}
-
-	fmt.Printf("bound %v\n", bounds)
 
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
@@ -119,7 +116,7 @@ func RotateClockLine(srcImg image.Image, poliLyne []Point) {
 	}
 }
 
-func RotateClock(srcImg image.Image) image.Image {
+func RotateClock(srcImg image.RGBA) image.RGBA {
 	srcDim := srcImg.Bounds()
 	dstImage := image.NewRGBA(image.Rect(0, 0, srcDim.Dy(), srcDim.Dx()))
 
@@ -129,6 +126,6 @@ func RotateClock(srcImg image.Image) image.Image {
 		}
 	}
 
-	return dstImage
+	return *dstImage
 }
 
