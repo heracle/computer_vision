@@ -16,14 +16,20 @@ import (
 
 var (
 	outputPath = pflag.StringP("output", "o", "result.jpeg", "The path where to save the output jpeg picture.")
-	noRandomBlocks = pflag.Int("no-blocks", 10000, "The number of random blocks which will fill the new image.")
+	noRandomBlocks = pflag.Int("no-blocks", 5000, "The number of random blocks which will fill the new image.")
 	lenBlockSquare = pflag.Int("len-block-square", 36, "The number of pixels in length of each block square.")
 	lenOverlapSquares = pflag.Int("len-overlap-blocks", 6, "The number of pixels in length representing the overlap between two consecutive blocks.")
 	distanceFromBorder = pflag.Int("distance-border", 0, "The minimum distance of the random blocks from the border of the initial image.")
 	)
 
+type pair struct {
+	index int
+	error float64
+}
+
 type blockObj struct {
 	complete image.RGBA
+	completeGray [][]float64
 	xMin     [][]float64
 	xMax     [][]float64
 	yMin     [][]float64
@@ -59,6 +65,8 @@ func EnlargeImage() *cobra.Command {
 				int(factorAmp * float64(img.Bounds().Dx())),
 				int(factorAmp * float64(img.Bounds().Dy())),
 				*lenOverlapSquares,
+				1,
+				nil,
 				)
 			if err != nil {
 				return errors.Wrapf(err, "could not create the image from blocks")
@@ -84,6 +92,7 @@ func getRandomBlocks(img image.Image, noBlocks int, sizeBlock int, overlap int, 
 		left := rand.Intn(img.Bounds().Dy() - sizeBlock - 2* distanceBorder) + distanceBorder
 
 		blocks[blockIndex].complete = defineBlockPart(up, left, sizeBlock, sizeBlock, img)
+		blocks[blockIndex].completeGray = meta.GetGrayImage(blocks[blockIndex].complete)
 		blocks[blockIndex].xMin = meta.GetGrayImage(defineBlockPart(up, left, overlap, sizeBlock, img))
 		blocks[blockIndex].yMin = meta.GetGrayImage(defineBlockPart(up, left, sizeBlock, overlap, img))
 		blocks[blockIndex].xMax = meta.GetGrayImage(defineBlockPart(up + sizeBlock - overlap, left, overlap, sizeBlock, img))
@@ -102,16 +111,15 @@ func defineBlockPart(up int, left int, width int, length int, img image.Image) i
 	return ret
 }
 
-func createImage(blocks []blockObj, width int, length int, overlap int) (image.Image, error){
+func createImage(blocks []blockObj, width int, length int, overlap int, alphaTexture float64, imgTr image.Image) (image.Image, error){
 	retImg := image.NewRGBA(image.Rect(0,0, width, length))
 	blockSize := blocks[0].complete.Rect.Dx()
 
-	imageBlockIndexPreviousLine := make([]int, width)
-	// Initiate all fields with -1 to say that there is no block above our position.
-	for i := 0; i < len(imageBlockIndexPreviousLine); i++ {
-		imageBlockIndexPreviousLine[i] = -1
-	}
+	imageBlockIndexPreviousLine := emptySplitSlice(width)
 
+	imgTrForBlock := image.NewRGBA(image.Rect(0, 0, blockSize, blockSize))
+
+	var grayTrBlock [][]float64
 	x := 0
 	y := 0
 	for x < width {
@@ -119,6 +127,15 @@ func createImage(blocks []blockObj, width int, length int, overlap int) (image.I
 		lenIndex := 0
 		leftBlock := -1
 		for y < length {
+			if alphaTexture < 1 {
+				for i := 0; i < blockSize; i++ {
+					for j := 0; j < blockSize; j++ {
+						imgTrForBlock.Set(i, j, imgTr.At(x + i, y + j))
+					}
+				}
+				grayTrBlock = meta.GetGrayImage(*imgTrForBlock)
+			}
+
 			leftBlock = addBlockToImage(
 				x,
 				y,
@@ -127,20 +144,26 @@ func createImage(blocks []blockObj, width int, length int, overlap int) (image.I
 				leftBlock,
 				blocks,
 				retImg,
+				alphaTexture,
+				grayTrBlock,
 				)
 			imageBlockIndexPreviousLine[lenIndex] = leftBlock
 			y += blockSize - overlap
 			lenIndex++
+
+			outFile, err := os.OpenFile("test.jpeg", os.O_WRONLY|os.O_CREATE, 0744)
+			if err != nil {
+				return nil, errors.Wrapf(err, "could not create file at path '%v'", "test.jpeg")
+			}
+
+			if err := jpeg.Encode(outFile, retImg, nil); err != nil {
+				return nil, errors.Wrapf(err, "could not encode image in jpeg format")
+			}
 		}
 		x += blockSize - overlap
 	}
 
 	return retImg, nil
-}
-
-type pair struct {
-	index int
-	error float64
 }
 
 func addBlockToImage(
@@ -151,6 +174,8 @@ func addBlockToImage(
 	leftLastBlock int,
 	blocks []blockObj,
 	img *image.RGBA,
+	alphaTexture float64,
+	imgTr [][]float64,
 	) int {
 	if upLastBlock == -1 && leftLastBlock == -1 {
 		firstBlock := rand.Intn(len(blocks))
@@ -185,6 +210,10 @@ func addBlockToImage(
 				}
 			}
 		}
+		if alphaTexture < 1 {
+			actualError = alphaTexture * math.Sqrt(actualError) + (1 - alphaTexture) * differenceErrorImages(blocks[indexBlock].completeGray, imgTr)
+		}
+
 		if actualError < minError {
 			minError = actualError
 			minBlock = indexBlock
@@ -228,6 +257,16 @@ func addBlockToImage(
 	}
 
 	return minBlock
+}
+
+func differenceErrorImages(img1 [][]float64, img2 [][]float64) float64 {
+	ret := float64(0)
+	for i := 0; i < len(img1); i++ {
+		for j := 0; j < len(img1[0]); j++ {
+			ret += (img1[i][j] - img2[i][j]) * (img1[i][j] - img2[i][j])
+		}
+	}
+	return math.Sqrt(ret)
 }
 
 func emptySplitSlice(len int) []int {

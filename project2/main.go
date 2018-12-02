@@ -13,6 +13,7 @@ func main() {
 
 	root.AddCommand(
 		cmd.EnlargeImage(),
+		cmd.AddTextureToImage(),
 		)
 
 	if err := root.Execute(); err != nil {
