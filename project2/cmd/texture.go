@@ -9,6 +9,8 @@ import (
 	"image/jpeg"
 	"os"
 	"strconv"
+
+	"strings"
 )
 
 var (
@@ -49,6 +51,7 @@ func AddTextureToImage() *cobra.Command {
 					img.Bounds().Dy(),
 					*lenOverlapSquares,
 					*alphaTexture,
+					*typeAlgorithm,
 					img,
 				)
 				if err != nil {
@@ -58,7 +61,10 @@ func AddTextureToImage() *cobra.Command {
 				// Set the resulted image as the texture for the future step.
 				imgTexture = resultImg
 
-				outFileName := strconv.Itoa(step) + (*outputPath)
+				nameFile := *outputPath
+				lastDot := strings.LastIndex(nameFile, ".")
+
+				outFileName := nameFile[:lastDot] + strconv.Itoa(step) + nameFile[lastDot:]
 				fmt.Printf("%v\n", outFileName)
 
 				outFile, err := os.OpenFile(outFileName, os.O_WRONLY|os.O_CREATE, 0744)

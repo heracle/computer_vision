@@ -20,7 +20,8 @@ var (
 	lenBlockSquare = pflag.Int("len-block-square", 36, "The number of pixels in length of each block square.")
 	lenOverlapSquares = pflag.Int("len-overlap-blocks", 6, "The number of pixels in length representing the overlap between two consecutive blocks.")
 	distanceFromBorder = pflag.Int("distance-border", 0, "The minimum distance of the random blocks from the border of the initial image.")
-	)
+	typeAlgorithm = pflag.IntP("algorithm", "a", 2, " '0' is for placing all the time completely random blocks\n '1' taking a block with an acceptable error of overlap with the neighbours\n '2' taking a block with an acceptable error and calculate a frontier for the best overlap\n")	
+)
 
 type pair struct {
 	index int
@@ -66,6 +67,7 @@ func EnlargeImage() *cobra.Command {
 				int(factorAmp * float64(img.Bounds().Dy())),
 				*lenOverlapSquares,
 				1,
+				*typeAlgorithm,
 				nil,
 				)
 			if err != nil {
@@ -111,7 +113,7 @@ func defineBlockPart(up int, left int, width int, length int, img image.Image) i
 	return ret
 }
 
-func createImage(blocks []blockObj, width int, length int, overlap int, alphaTexture float64, imgTr image.Image) (image.Image, error){
+func createImage(blocks []blockObj, width int, length int, overlap int, alphaTexture float64, algorithm int, imgTr image.Image) (image.Image, error){
 	retImg := image.NewRGBA(image.Rect(0,0, width, length))
 	blockSize := blocks[0].complete.Rect.Dx()
 
@@ -145,6 +147,7 @@ func createImage(blocks []blockObj, width int, length int, overlap int, alphaTex
 				blocks,
 				retImg,
 				alphaTexture,
+				algorithm,
 				grayTrBlock,
 				)
 			imageBlockIndexPreviousLine[lenIndex] = leftBlock
@@ -175,6 +178,7 @@ func addBlockToImage(
 	blocks []blockObj,
 	img *image.RGBA,
 	alphaTexture float64,
+	algorithm int,
 	imgTr [][]float64,
 	) int {
 	if upLastBlock == -1 && leftLastBlock == -1 {
@@ -231,17 +235,21 @@ func addBlockToImage(
 		foundOkBlocks++
 	}
 
-	minBlock = possibleBlocks[rand.Intn(foundOkBlocks)].index
+	if algorithm != 0 {
+		minBlock = possibleBlocks[rand.Intn(foundOkBlocks)].index
+	} else {
+		minBlock = possibleBlocks[rand.Intn(len(blocks))].index
+	}
 
 	var verticallySplit []int
 	var horizontallySplit []int
 
-	if leftLastBlock != -1 {
+	if algorithm == 2 && leftLastBlock != -1 {
 		verticallySplit = findVerticallySplit(blocks[leftLastBlock].yMax, blocks[minBlock].yMin)
 	} else {
 		verticallySplit = emptySplitSlice(blockSize)
 	}
-	if upLastBlock != -1 {
+	if algorithm == 2 && upLastBlock != -1 {
 		horizontallySplit = findHorizontallySplit(blocks[upLastBlock].xMax, blocks[minBlock].xMin)
 	} else {
 		horizontallySplit = emptySplitSlice(blockSize)
